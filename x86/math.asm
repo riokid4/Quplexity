@@ -148,52 +148,42 @@ matrix2x2:
     ret
 
 gills_inv_matrix2x2:
+    movss   xmm1, dword [rdi]   ; a
+    movss   xmm2, dword [rsi]   ; b
+    movss   xmm3, dword [rdx]   ; c
+    movss   xmm4, dword [rcx]   ; d
 
-    movss xmm1, dword [rdi]     ; xmm1 = num1
-    movss xmm2, dword [rsi]     ; xmm2 = num2
-    movss xmm3, dword [rdx]     ; xmm3 = num3
-    movss xmm4, dword [rcx]     ; xmm4 = num4
-    
-    ; Calculate determinant: det(A)
-    ; det(A) = ad - dc
+    ; det = a*d - b*c
+    movaps  xmm5, xmm1
+    mulss   xmm5, xmm4
+    movaps  xmm6, xmm2
+    mulss   xmm6, xmm3
+    subss   xmm5, xmm6
 
-    movss [mA], xmm1            ; load the current value of xmm1 into float [mA] in memory
-    movss [mB], xmm2            ; load the current value of xmm2 into float [mB] in memory
+    ; reject zero or NaN determinant
+    pxor    xmm8, xmm8
+    ucomiss xmm5, xmm8
+    jp      determinant_error
+    je      determinant_error
 
-    mulss xmm1, xmm4            ; xmm1 = ad
-    mulss xmm2, xmm3            ; xmm2 = dc
+    movss   xmm0, [one]
+    divss   xmm0, xmm5          ; 1/det
 
-    subss xmm1, xmm2            ; xmm1 = ad - dc
-    pxor xmm8, xmm8             ; load zero into xmm8
-    ucomiss xmm1, xmm8          ; compare the resultant of ad - dc with zero
+    mulss   xmm4, xmm0          ; d/det
+    pxor    xmm6, xmm6
+    subss   xmm6, xmm2
+    mulss   xmm6, xmm0          ; -b/det
+    pxor    xmm7, xmm7
+    subss   xmm7, xmm3
+    mulss   xmm7, xmm0          ; -c/det
+    mulss   xmm1, xmm0          ; a/det
 
-    jp determinant_error        ; if ad - dc = 0 there is no inverse of the matrix
+    movss   dword [r8],      xmm4
+    movss   dword [r8 + 4],  xmm6
+    movss   dword [r8 + 8],  xmm7
+    movss   dword [r8 + 12], xmm1
 
-    ;ELSE CONTINUE 
-
-    movss xmm5, [one]           ; xmm5 = 1.0
-    movss xmm6, [mA]            ; get the [mA] value ready for use
-    movss xmm7, [mB]            ; get the [mB] value ready for use
-
-    divss xmm5, xmm1            ; xmm5 = 1/det(A)
-                                ; xmm5 now holds the value of det(A)
-
-    ; Compute the inverse matrix elements
-    movss xmm6, [mA]            ; Load mA value into xmm6
-    mulss xmm6, xmm5            ; xmm6 = num1 * (1 / det(A))
-    movss xmm7, [mB]            ; Load mB value into xmm7
-    mulss xmm7, xmm5            ; xmm7 = num2 * (1 / det(A))
-
-    mulss xmm3, xmm5            ; xmm3 = num3 * (1 / det(A))
-    mulss xmm4, xmm5            ; xmm4 = num4 * (1 / det(A))
-
-    ; Store results in inv_matrix_C
-    movss dword [r8], xmm6      ; Store xmm6 in inv_matrix_C[0]
-    movss dword [r8 + 4], xmm7  ; Store xmm7 in inv_matrix_C[1]
-    movss dword [r8 + 8], xmm3  ; Store xmm3 in inv_matrix_C[2]
-    movss dword [r8 + 12], xmm4 ; Store xmm4 in inv_matrix_C[3]
-
-          
+    mov     eax, 1
     ret
 
 determinant_error:
